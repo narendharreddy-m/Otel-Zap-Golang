@@ -2,6 +2,7 @@ package otelzap
 
 import (
 	"context"
+	"math"
 	"time"
 
 	otelLog "go.opentelemetry.io/otel/log"
@@ -70,7 +71,38 @@ func (c *otelCore) Write(ent zapcore.Entry, fields []zapcore.Field) error {
 		rec.SetTimestamp(time.Now())
 	}
 
-	// Minimal v1: skip field mapping. We'll add zap fields -> OTel attributes next.
+	// Convert zap fields -> OpenTelemetry attributes
+	attrs := make([]otelLog.KeyValue, 0, len(fields))
+
+	for _, f := range fields {
+		switch f.Type {
+
+		case zapcore.StringType:
+			attrs = append(attrs, otelLog.String(f.Key, f.String))
+
+		case zapcore.Int64Type:
+			attrs = append(attrs, otelLog.Int64(f.Key, f.Integer))
+
+		case zapcore.Int32Type:
+			attrs = append(attrs, otelLog.Int64(f.Key, int64(f.Integer)))
+
+		case zapcore.BoolType:
+			attrs = append(attrs, otelLog.Bool(f.Key, f.Integer == 1))
+
+		case zapcore.Float64Type:
+			attrs = append(attrs, otelLog.Float64(f.Key, math.Float64frombits(uint64(f.Integer))))
+
+		case zapcore.ErrorType:
+			if err, ok := f.Interface.(error); ok {
+				attrs = append(attrs, otelLog.String(f.Key, err.Error()))
+			}
+		}
+	}
+
+	if len(attrs) > 0 {
+		rec.AddAttributes(attrs...)
+	}
+
 	c.logger.Emit(c.ctx, rec)
 	return nil
 }
