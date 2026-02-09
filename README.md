@@ -25,11 +25,15 @@ This makes it easy to adopt OpenTelemetry **without rewriting existing Zap loggi
 ## Features
 
 * Zap → OpenTelemetry Logs bridge
+* Structured zap fields are exported as OpenTelemetry log attributes
 * OTLP gRPC export support
 * Optional stdout logging (Zap production logger)
 * Clean shutdown and flush support
 * Minimal configuration
-* No metrics or tracing required
+
+**Out of scope (by design):**
+* Metrics (planned)
+* Automatic tracing setup (user-controlled)
 
 ---
 
@@ -71,13 +75,47 @@ func main() {
 ```
 
 ---
+## Trace correlation (optional)
+
+This library supports **context-based trace correlation**.
+
+If you log using a `context.Context` that contains an active span, the OpenTelemetry Logs SDK will automatically attach:
+
+* `trace_id`
+* `span_id`
+
+to the emitted log record.
+
+### Example
+
+```go
+import "go.opentelemetry.io/otel"
+
+tracer := otel.Tracer("example")
+
+ctx, span := tracer.Start(context.Background(), "demo-span")
+defer span.End()
+
+logger.WithContext(ctx).Zap.Info(
+	"processing request",
+	zap.String("env", "prod"),
+)
+```
+
+When a span is present, logs and traces can be correlated in observability backends.
+
+> Note: This library does **not** initialize tracing automatically.
+> Users are expected to configure tracing explicitly if needed.
+
+---
 
 ## How it works (high level)
 
 1. Your application logs using Zap
 2. A custom Zap core converts each log entry into an OpenTelemetry log record
-3. Logs are exported using OTLP
-4. An OpenTelemetry Collector or backend receives and processes them
+3. Structured zap fields become OpenTelemetry attributes
+4. Logs are exported using OTLP
+5. An OpenTelemetry Collector or backend receives and processes them
 
 ```
 Zap Logger
@@ -128,8 +166,8 @@ Then run your app and verify logs appear in the collector output.
 
 ## What this library does NOT do (by design)
 
-* No metrics support (yet)
-* No tracing setup (logs only)
+* No metrics support (planned)
+* No automatic trace/span initialization
 * No automatic environment variable parsing
 * No vendor-specific exporters
 
@@ -143,5 +181,6 @@ Use `otel-zap-golang` if:
 
 * your services already use Zap
 * you want OpenTelemetry log export
-* you want minimal changes to existing code
+* you want structured log attributes
+* you want optional trace correlation
 * you prefer explicit configuration and control

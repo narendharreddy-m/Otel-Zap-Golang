@@ -1,7 +1,10 @@
 package otelzap
 
 import (
+	"context"
+
 	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 
 	otelLog "go.opentelemetry.io/otel/log"
 	sdklog "go.opentelemetry.io/otel/sdk/log"
@@ -29,4 +32,29 @@ func New(cfg Config) (*Logger, error) {
 		Zap: zlogger,
 		lp:  lp,
 	}, nil
+}
+
+// WithContext returns a shallow copy of Logger that uses the provided context.
+// If the context contains an active span, logs will be trace-correlated.
+func (l *Logger) WithContext(ctx context.Context) *Logger {
+	if ctx == nil {
+		return l
+	}
+
+	clone := *l
+
+	// zapcore.NewTee returns a tee core; we must walk it
+	if tee, ok := clone.Zap.Core().(interface {
+		Core(i int) zapcore.Core
+	}); ok {
+		for i := 0; ; i++ {
+			core := tee.Core(i)
+			if oc, ok := core.(*otelCore); ok {
+				oc.ctx = ctx
+				break
+			}
+		}
+	}
+
+	return &clone
 }
