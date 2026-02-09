@@ -9,6 +9,7 @@ import (
 	otelLog "go.opentelemetry.io/otel/log"
 	sdklog "go.opentelemetry.io/otel/sdk/log"
 	"go.opentelemetry.io/otel/sdk/resource"
+	semconv "go.opentelemetry.io/otel/semconv/v1.21.0"
 )
 
 type Logger struct {
@@ -29,7 +30,10 @@ func New(cfg Config) (*Logger, error) {
 	var apiLP otelLog.LoggerProvider = lp
 
 	// --- Resource (shared by logs + metrics) ---
-	res, err := resource.New(context.Background())
+	res := resource.NewWithAttributes(
+		semconv.SchemaURL,
+		semconv.ServiceName(cfg.ServiceName),
+	)
 	if err != nil {
 		return nil, err
 	}

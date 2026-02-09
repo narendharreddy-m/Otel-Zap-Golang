@@ -1,6 +1,10 @@
 package otelzap
 
-import "time"
+import (
+	"time"
+
+	"go.uber.org/zap/zapcore"
+)
 
 // Config controls how the zap -> OpenTelemetry logger behaves.
 type Config struct {
@@ -18,7 +22,7 @@ type Config struct {
 
 	// Level controls which zap logs are emitted to OTel.
 	// If nil, defaults to zapcore.InfoLevel in core.go via defaultLevel().
-	Level any // keep Config independent of zapcore for now
+	Level zapcore.Level
 
 	EnableMetrics bool
 }
