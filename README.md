@@ -152,6 +152,10 @@ service:
     logs:
       receivers: [otlp]
       exporters: [debug]
+
+    traces:
+      receivers: [otlp]
+      exporters: [debug]
 ```
 
 Run the collector:
