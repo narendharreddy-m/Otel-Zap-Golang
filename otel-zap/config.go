@@ -19,4 +19,6 @@ type Config struct {
 	// Level controls which zap logs are emitted to OTel.
 	// If nil, defaults to zapcore.InfoLevel in core.go via defaultLevel().
 	Level any // keep Config independent of zapcore for now
+
+	EnableMetrics bool
 }

@@ -8,11 +8,14 @@ import (
 
 	otelLog "go.opentelemetry.io/otel/log"
 	sdklog "go.opentelemetry.io/otel/sdk/log"
+	"go.opentelemetry.io/otel/sdk/resource"
 )
 
 type Logger struct {
 	Zap *zap.Logger
 	lp  *sdklog.LoggerProvider
+
+	metricsShutdown func(context.Context) error
 }
 
 // New creates a zap.Logger that exports logs through OpenTelemetry Logs (OTLP).
@@ -25,12 +28,33 @@ func New(cfg Config) (*Logger, error) {
 	// sdk LoggerProvider implements the otel/log LoggerProvider interface.
 	var apiLP otelLog.LoggerProvider = lp
 
-	core := buildCore(cfg, apiLP)
+	// --- Resource (shared by logs + metrics) ---
+	res, err := resource.New(context.Background())
+	if err != nil {
+		return nil, err
+	}
+
+	// --- Metrics (optional) ---
+	var metrics *metricsState
+	var metricsShutdown func(context.Context) error
+
+	if cfg.EnableMetrics {
+		m, shutdown, err := initMetrics(context.Background(), cfg, res)
+		if err != nil {
+			return nil, err
+		}
+		metrics = m
+		metricsShutdown = shutdown
+	}
+
+	// --- Core ---
+	core := buildCore(cfg, apiLP, metrics)
 	zlogger := zap.New(core)
 
 	return &Logger{
-		Zap: zlogger,
-		lp:  lp,
+		Zap:             zlogger,
+		lp:              lp,
+		metricsShutdown: metricsShutdown,
 	}, nil
 }
 
@@ -49,9 +73,11 @@ func (l *Logger) WithContext(ctx context.Context) *Logger {
 	}); ok {
 		for i := 0; ; i++ {
 			core := tee.Core(i)
+			if core == nil {
+				break
+			}
 			if oc, ok := core.(*otelCore); ok {
 				oc.ctx = ctx
-				break
 			}
 		}
 	}
