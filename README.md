@@ -167,24 +167,3 @@ otelcol-contrib --config otel-collector.yaml
 Then run your app and verify logs appear in the collector output.
 
 ---
-
-## What this library does NOT do (by design)
-
-* No metrics support (planned)
-* No automatic trace/span initialization
-* No automatic environment variable parsing
-* No vendor-specific exporters
-
-The goal is to keep the library **small, predictable, and focused**.
-
----
-
-## When to use this
-
-Use `otel-zap-golang` if:
-
-* your services already use Zap
-* you want OpenTelemetry log export
-* you want structured log attributes
-* you want optional trace correlation
-* you prefer explicit configuration and control
