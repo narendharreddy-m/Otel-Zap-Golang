@@ -18,7 +18,10 @@ type otelCore struct {
 	metrics *metricsState // nil when metrics disabled
 }
 
-func defaultLevel() zapcore.LevelEnabler {
+func levelFromConfig(cfg Config) zapcore.LevelEnabler {
+	if cfg.Level != 0 {
+		return cfg.Level
+	}
 	return zapcore.InfoLevel
 }
 
@@ -28,7 +31,7 @@ func buildCore(cfg Config, lp otelLog.LoggerProvider, m *metricsState) zapcore.C
 	core := &otelCore{
 		ctx:     context.Background(),
 		logger:  otelLogger,
-		level:   defaultLevel(),
+		level:   levelFromConfig(cfg),
 		metrics: m,
 	}
 
