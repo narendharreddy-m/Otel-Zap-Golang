@@ -2,11 +2,13 @@ package otelzap
 
 import "context"
 
-// Shutdown flushes and shuts down the OpenTelemetry logger provider.
-// Call this on app exit.
+// Shutdown flushes logs and metrics.
 func (l *Logger) Shutdown(ctx context.Context) error {
-	if l == nil || l.lp == nil {
-		return nil
+	if err := l.lp.Shutdown(ctx); err != nil {
+		return err
 	}
-	return l.lp.Shutdown(ctx)
+	if l.metricsShutdown != nil {
+		return l.metricsShutdown(ctx)
+	}
+	return nil
 }

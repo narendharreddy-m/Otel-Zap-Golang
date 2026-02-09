@@ -12,23 +12,24 @@ import (
 
 // otelCore is a zapcore.Core that converts zap entries to OpenTelemetry log records.
 type otelCore struct {
-	ctx    context.Context
-	logger otelLog.Logger
-	level  zapcore.LevelEnabler
+	ctx     context.Context
+	logger  otelLog.Logger
+	level   zapcore.LevelEnabler
+	metrics *metricsState // nil when metrics disabled
 }
 
 func defaultLevel() zapcore.LevelEnabler {
-	// default to Info if user doesn't specify a level in the public API
 	return zapcore.InfoLevel
 }
 
-func buildCore(cfg Config, lp otelLog.LoggerProvider) zapcore.Core {
+func buildCore(cfg Config, lp otelLog.LoggerProvider, m *metricsState) zapcore.Core {
 	otelLogger := lp.Logger(cfg.ServiceName)
 
 	core := &otelCore{
-		ctx:    context.Background(),
-		logger: otelLogger,
-		level:  defaultLevel(),
+		ctx:     context.Background(),
+		logger:  otelLogger,
+		level:   defaultLevel(),
+		metrics: m,
 	}
 
 	if !cfg.EnableStdout {
@@ -40,11 +41,16 @@ func buildCore(cfg Config, lp otelLog.LoggerProvider) zapcore.Core {
 }
 
 func (c *otelCore) Enabled(lvl zapcore.Level) bool {
-	return c.level.Enabled(lvl)
+	enabled := c.level.Enabled(lvl)
+
+	if !enabled && c.metrics != nil {
+		c.metrics.droppedTotal.Add(c.ctx, 1)
+	}
+
+	return enabled
 }
 
 func (c *otelCore) With(fields []zapcore.Field) zapcore.Core {
-	// Minimal v1: ignore With(fields). Later we can store fields and map to OTel attributes.
 	return c
 }
 
@@ -57,6 +63,14 @@ func (c *otelCore) Check(ent zapcore.Entry, ce *zapcore.CheckedEntry) *zapcore.C
 
 func (c *otelCore) Write(ent zapcore.Entry, fields []zapcore.Field) error {
 	var rec otelLog.Record
+
+	// Metrics: total logs
+	if c.metrics != nil {
+		c.metrics.logsTotal.Add(c.ctx, 1)
+		if ent.Level >= zapcore.ErrorLevel {
+			c.metrics.logsErrorTotal.Add(c.ctx, 1)
+		}
+	}
 
 	// Message -> Body
 	rec.SetBody(otelLog.StringValue(ent.Message))
@@ -90,7 +104,10 @@ func (c *otelCore) Write(ent zapcore.Entry, fields []zapcore.Field) error {
 			attrs = append(attrs, otelLog.Bool(f.Key, f.Integer == 1))
 
 		case zapcore.Float64Type:
-			attrs = append(attrs, otelLog.Float64(f.Key, math.Float64frombits(uint64(f.Integer))))
+			attrs = append(attrs, otelLog.Float64(
+				f.Key,
+				math.Float64frombits(uint64(f.Integer)),
+			))
 
 		case zapcore.ErrorType:
 			if err, ok := f.Interface.(error); ok {
